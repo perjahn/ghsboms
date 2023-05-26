@@ -45,7 +45,7 @@ class Program
     static async Task<int> GetSBOMS(string organization, string githubtoken, string folder)
     {
         var startTime = Stopwatch.GetTimestamp();
-        
+
         using var client = new HttpClient();
         client.BaseAddress = BaseAdress;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", githubtoken);
