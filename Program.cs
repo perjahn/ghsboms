@@ -44,7 +44,7 @@ class Program
 
     static async Task<int> GetSBOMS(string organization, string githubtoken, string folder)
     {
-        var watch = Stopwatch.StartNew();
+        var startTime = Stopwatch.GetTimestamp();
 
         using var client = new HttpClient();
         client.BaseAddress = BaseAdress;
@@ -57,7 +57,7 @@ class Program
 
         await SaveSBOMS(client, organization, reponames, folder);
 
-        Console.WriteLine($"Saved {Directory.GetFiles("sboms").Length} sboms in {watch.Elapsed}");
+        Console.WriteLine($"Saved {Directory.GetFiles("sboms").Length} sboms in {Stopwatch.GetElapsedTime(startTime)}");
 
         return 0;
     }
