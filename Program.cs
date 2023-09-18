@@ -27,22 +27,28 @@ class Program
             Console.WriteLine("Missing environment variable: GITHUB_TOKEN");
             return 1;
         }
-
-        if (args.Length != 2)
+        if (!githubtoken.StartsWith("ghp_") || !githubtoken.Skip(4).All(char.IsLetterOrDigit))
         {
-            Console.WriteLine("Usage: getsboms <organization> <folder>");
+            Console.WriteLine("GITHUB_TOKEN must be a valid personal access token.");
             return 1;
         }
 
-        var organization = args[0];
+        if (args.Length != 2)
+        {
+            Console.WriteLine("Usage: getsboms orgs/<organization> <folder>");
+            Console.WriteLine("Usage: getsboms users/<username> <folder>");
+            return 1;
+        }
+
+        var entity = args[0];
         var folder = args[1];
 
-        var result = await GetSBOMS(organization, githubtoken, folder);
+        var result = await GetSBOMS(entity, githubtoken, folder);
 
         return result;
     }
 
-    static async Task<int> GetSBOMS(string organization, string githubtoken, string folder)
+    static async Task<int> GetSBOMS(string entity, string githubtoken, string folder)
     {
         var startTime = Stopwatch.GetTimestamp();
 
@@ -51,18 +57,18 @@ class Program
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", githubtoken);
         client.DefaultRequestHeaders.UserAgent.Add(UserAgent);
 
-        var reponames = await GetAllRepositories(client, organization);
+        var reponames = await GetAllRepositories(client, entity);
 
         Console.WriteLine($"Got {reponames.Count} repos.");
 
-        await SaveSBOMS(client, organization, reponames, folder);
+        await SaveSBOMS(client, entity, reponames, folder);
 
-        Console.WriteLine($"Saved {Directory.GetFiles("sboms").Length} sboms in {Stopwatch.GetElapsedTime(startTime)}");
+        Console.WriteLine($"Saved {Directory.GetFiles(folder).Length} sboms in {Stopwatch.GetElapsedTime(startTime)}");
 
         return 0;
     }
 
-    static async Task SaveSBOMS(HttpClient client, string organization, List<string> reponames, string folder)
+    static async Task SaveSBOMS(HttpClient client, string entity, List<string> reponames, string folder)
     {
         if (Directory.Exists(folder))
         {
@@ -72,12 +78,14 @@ class Program
         Console.WriteLine($"Creating folder: '{folder}'");
         Directory.CreateDirectory(folder);
 
-        await Task.WhenAll(reponames.Select(reponame => SaveSBOM(client, organization, reponame, folder)));
+        await Task.WhenAll(reponames.Select(reponame => SaveSBOM(client, entity, reponame, folder)));
     }
 
-    static async Task SaveSBOM(HttpClient client, string organization, string reponame, string folder)
+    static async Task SaveSBOM(HttpClient client, string entity, string reponame, string folder)
     {
-        var address = $"repos/{organization}/{reponame}/dependency-graph/sbom";
+        var index = entity.IndexOf('/');
+        var entityName = index < 0 ? entity : entity[(index + 1)..];
+        var address = $"repos/{entityName}/{reponame}/dependency-graph/sbom";
 
         Console.WriteLine($"Getting sbom: '{address}'");
 
@@ -96,7 +104,7 @@ class Program
         {
             Console.WriteLine($"Get '{address}'");
             Console.WriteLine($"Result: >>>{content}<<<");
-            Console.WriteLine($"Exception: >>>{ex.ToString()}<<<");
+            Console.WriteLine($"Exception: >>>{ex}<<<");
             return;
         }
 
@@ -111,11 +119,11 @@ class Program
         }
     }
 
-    static async Task<List<string>> GetAllRepositories(HttpClient client, string organization)
+    static async Task<List<string>> GetAllRepositories(HttpClient client, string entity)
     {
         var allrepos = new List<string>();
 
-        var address = $"orgs/{organization}/repos?per_page={PerPage}";
+        var address = $"{entity}/repos?per_page={PerPage}";
         while (address != string.Empty)
         {
             Console.WriteLine($"Getting repos: '{address}'");
@@ -143,7 +151,7 @@ class Program
             {
                 Console.WriteLine($"Get '{address}'");
                 Console.WriteLine($"Result: >>>{content}<<<");
-                Console.WriteLine($"Exception: >>>{ex.ToString()}<<<");
+                Console.WriteLine($"Exception: >>>{ex}<<<");
                 continue;
             }
         }
@@ -161,7 +169,7 @@ class Program
                 var parts = link.Split(';');
                 if (parts.Length == 2 && parts[0].Trim().StartsWith('<') && parts[0].Trim().EndsWith('>') && parts[1].Trim() == "rel=\"next\"")
                 {
-                    var url = parts[0].Trim().Substring(1, parts[0].Trim().Length - 2);
+                    var url = parts[0].Trim()[1..^1];
                     return url;
                 }
             }
